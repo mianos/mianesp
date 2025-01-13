@@ -1,0 +1,6 @@
+name: mianesp
+version: 0.0.1
+description: A collection of reusable ESP-IDF components.
+maintainers:
+  - misteresp@mianos.com
+
