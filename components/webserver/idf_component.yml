@@ -1,10 +1,10 @@
 version: "0.0.1"
 description: "Simple c++ wrapper around the esp-idf http wev server"
-dependencies:
-  - name: wifimanager
-    path: components/wifimanager
-  - name: jsonwrapper
-    path: components/jsonwrapper
-  - name: esp_http_server
-  - name: esp_timer
+  dependencies:
+    - name: wifimanager
+      path: components/wifimanager
+    - name: jsonwrapper
+      path: components/jsonwrapper
+    - name: esp_http_server
+    - name: esp_timer
 
