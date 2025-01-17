@@ -3,9 +3,21 @@ version: "0.0.1"
 description: "Simple C++ wrapper around the esp-idf HTTP web server"
 dependencies:
   wifimanager:
-    path: ../../components/wifimanager
+    git: git@github.com:mianos/mianesp.git
+    path: components/wifimanager
+    version: main
   jsonwrapper:
-    path: ../../components/jsonwrapper
+    git: git@github.com:mianos/mianesp.git
+    path: components/jsonwrapper
+    version: main
+  nvsstoragemanager:
+    git: git@github.com:mianos/mianesp.git
+    path: components/nvsstoragemanager
+    version: main
+  button:
+    git: git@github.com:mianos/mianesp.git
+    path: components/button
+    version: main
   esp_http_server: {}
   esp_timer: {}
 
