@@ -4,7 +4,7 @@
 #include <cstring>
 #include <string>
 #include "esp_random.h"
-// #include "esp_timer.h"
+#include "esp_timer.h"
 
 #include "JsonWrapper.h"
 #include "WebServer.h"
