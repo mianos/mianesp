@@ -18,8 +18,8 @@ struct WebContext {
 class WebServer {
 public:
     WebServer(WebContext* context);
-    ~WebServer();
-    esp_err_t start();
+    virtual ~WebServer();
+    virtual esp_err_t start(); // Now marked as virtual
     esp_err_t stop();
 
 private:
