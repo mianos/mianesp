@@ -2,8 +2,6 @@ name: "webserver"
 version: "0.0.1"
 description: "Simple C++ wrapper around the esp-idf HTTP web server"
 dependencies:
-  esp_http_server: {}
-  esp_timer: {}
   wifimanager:
     git: git@github.com:mianos/mianesp.git
     path: components/wifimanager
