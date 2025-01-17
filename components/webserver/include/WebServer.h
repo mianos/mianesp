@@ -34,9 +34,6 @@ private:
         httpd_req_handler_t handler;
     };
 
-    WebContext* webContext;
-    httpd_handle_t server;
-
     static QueueHandle_t async_req_queue;
     static SemaphoreHandle_t worker_ready_count;
     static TaskHandle_t worker_handles[MAX_ASYNC_REQUESTS];
@@ -51,5 +48,8 @@ private:
     static bool is_on_async_worker_thread();
     static esp_err_t submit_async_req(httpd_req_t *req, httpd_req_handler_t handler);
     static void start_async_req_workers();
+protected:
+    WebContext* webContext;
+    httpd_handle_t server;
 };
 
