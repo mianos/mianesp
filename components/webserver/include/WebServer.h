@@ -4,7 +4,6 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
-
 #include "WifiManager.h"
 
 struct WebContext {
@@ -19,7 +18,8 @@ class WebServer {
 public:
     WebServer(WebContext* context);
     virtual ~WebServer();
-    virtual esp_err_t start(); // Now marked as virtual
+
+    virtual esp_err_t start();
     esp_err_t stop();
 
 private:
@@ -27,7 +27,7 @@ private:
     static constexpr int ASYNC_WORKER_TASK_STACK_SIZE = 4096;
     static constexpr int MAX_ASYNC_REQUESTS = 5;
 
-    using httpd_req_handler_t = esp_err_t (*)(httpd_req_t *req);
+    using httpd_req_handler_t = esp_err_t (*)(httpd_req_t* req);
 
     struct httpd_async_req_t {
         httpd_req_t* req;
@@ -38,17 +38,16 @@ private:
     static SemaphoreHandle_t worker_ready_count;
     static TaskHandle_t worker_handles[MAX_ASYNC_REQUESTS];
 
-
-    static esp_err_t healthz_handler(httpd_req_t *req);
-    static esp_err_t reset_wifi_handler(httpd_req_t *req);
-
-    static void async_req_worker_task(void *arg);
+    static void async_req_worker_task(void* arg);
     static bool is_on_async_worker_thread();
-    static esp_err_t submit_async_req(httpd_req_t *req, httpd_req_handler_t handler);
+    static esp_err_t submit_async_req(httpd_req_t* req, httpd_req_handler_t handler);
     static void start_async_req_workers();
-    WebContext* webContext;
+
+    static esp_err_t reset_wifi_handler(httpd_req_t* req);
+    static esp_err_t healthz_handler(httpd_req_t* req);
+
 protected:
     httpd_handle_t server;
-    static WebServer* get_context(httpd_req_t* req);
+    WebContext* webContext;
 };
 

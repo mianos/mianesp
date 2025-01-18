@@ -1,4 +1,5 @@
-
+#include "WebServer.h"
+#include "JsonWrapper.h"
 #include <ctime>
 #include <vector>
 #include <cstring>
@@ -6,18 +7,15 @@
 #include "esp_random.h"
 #include "esp_timer.h"
 
-#include "JsonWrapper.h"
-#include "WebServer.h"
+static const char* TAG = "WebServer";
 
-static const char *TAG = "WebServer";
-
-// Define static variables
 QueueHandle_t WebServer::async_req_queue = nullptr;
 SemaphoreHandle_t WebServer::worker_ready_count = nullptr;
 TaskHandle_t WebServer::worker_handles[WebServer::MAX_ASYNC_REQUESTS] = {nullptr};
 
-// Constructor and Destructor
-WebServer::WebServer(WebContext* webContext) : webContext(webContext), server(nullptr) {
+WebServer::WebServer(WebContext* context)
+    : server(nullptr),
+      webContext(context) {
     start_async_req_workers();
 }
 
@@ -25,82 +23,66 @@ WebServer::~WebServer() {
     stop();
 }
 
-// Helper method to extract context
-WebServer* WebServer::get_context(httpd_req_t* req) {
-    auto* ws = static_cast<WebServer*>(req->user_ctx);
-    if (!ws) {
-        ESP_LOGE(TAG, "ctx null?");
-        httpd_resp_send_500(req);
-        return nullptr;
-    }
-    return ws;
-}
-
-// Start server
 esp_err_t WebServer::start() {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.lru_purge_enable = true;
     config.server_port = 80;
     config.max_open_sockets = MAX_ASYNC_REQUESTS + 1;
 
-    ESP_LOGI(TAG, "Starting server on port: '%d'", config.server_port);
+    ESP_LOGI(TAG, "Starting server on port: %d", config.server_port);
 
-    esp_err_t ret = httpd_start(&server, &config);
-    if (ret != ESP_OK) {
+    esp_err_t result = httpd_start(&server, &config);
+    if (result != ESP_OK) {
         ESP_LOGE(TAG, "Error starting server!");
-        return ret;
+        return result;
     }
 
-    httpd_uri_t reset_wifi_uri = {
+    httpd_uri_t resetWifiUri {
         .uri       = "/reset",
         .method    = HTTP_POST,
         .handler   = reset_wifi_handler,
-        .user_ctx  = this
+        .user_ctx  = webContext
     };
+    httpd_register_uri_handler(server, &resetWifiUri);
 
-    httpd_uri_t healthz_uri = {
+    httpd_uri_t healthzUri {
         .uri       = "/healthz",
         .method    = HTTP_GET,
         .handler   = healthz_handler,
-        .user_ctx  = this
+        .user_ctx  = webContext
     };
-
-    httpd_register_uri_handler(server, &reset_wifi_uri);
-    httpd_register_uri_handler(server, &healthz_uri);
+    httpd_register_uri_handler(server, &healthzUri);
 
     return ESP_OK;
 }
 
-// Stop server
 esp_err_t WebServer::stop() {
     if (server != nullptr) {
-        esp_err_t ret = httpd_stop(server);
-        if (ret == ESP_OK) {
+        esp_err_t result = httpd_stop(server);
+        if (result == ESP_OK) {
             server = nullptr;
         }
-        return ret;
+        return result;
     }
     return ESP_OK;
 }
 
-// Start asynchronous request workers
 void WebServer::start_async_req_workers() {
-    // Create counting semaphore
     worker_ready_count = xSemaphoreCreateCounting(MAX_ASYNC_REQUESTS, 0);
-    if (worker_ready_count == nullptr) {
-        ESP_LOGE(TAG, "Failed to create workers counting semaphore");
+    if (!worker_ready_count) {
+        ESP_LOGE(TAG, "Failed to create counting semaphore");
         return;
     }
     async_req_queue = xQueueCreate(1, sizeof(httpd_async_req_t));
-    if (async_req_queue == nullptr) {
+    if (!async_req_queue) {
         ESP_LOGE(TAG, "Failed to create async request queue");
         vSemaphoreDelete(worker_ready_count);
+        worker_ready_count = nullptr;
         return;
     }
 
-    // Start worker tasks
     for (int i = 0; i < MAX_ASYNC_REQUESTS; ++i) {
-        BaseType_t success = xTaskCreate(
+        BaseType_t created = xTaskCreate(
             async_req_worker_task,
             "async_req_worker",
             ASYNC_WORKER_TASK_STACK_SIZE,
@@ -108,79 +90,98 @@ void WebServer::start_async_req_workers() {
             ASYNC_WORKER_TASK_PRIORITY,
             &worker_handles[i]
         );
-
-        if (success != pdPASS) {
-            ESP_LOGE(TAG, "Failed to start async request worker");
-            continue;
+        if (created != pdPASS) {
+            ESP_LOGE(TAG, "Failed to start async worker %d", i);
         }
     }
 }
 
-// Async request worker task
 void WebServer::async_req_worker_task(void* arg) {
     ESP_LOGI(TAG, "Starting async request worker task");
-
     while (true) {
-        // Signal that a worker is ready
         xSemaphoreGive(worker_ready_count);
 
-        // Wait for a request
-        httpd_async_req_t async_req;
-        if (xQueueReceive(async_req_queue, &async_req, portMAX_DELAY)) {
-            ESP_LOGI(TAG, "Invoking %s", async_req.req->uri);
-
-            // Call the handler
-            async_req.handler(async_req.req);
-
-            // Complete the asynchronous request
-            if (httpd_req_async_handler_complete(async_req.req) != ESP_OK) {
+        httpd_async_req_t asyncReq;
+        if (xQueueReceive(async_req_queue, &asyncReq, portMAX_DELAY)) {
+            ESP_LOGI(TAG, "Invoking %s", asyncReq.req->uri);
+            asyncReq.handler(asyncReq.req);
+            if (httpd_req_async_handler_complete(asyncReq.req) != ESP_OK) {
                 ESP_LOGE(TAG, "Failed to complete async request");
             }
         }
     }
-
     vTaskDelete(nullptr);
 }
 
-// Handlers
-esp_err_t WebServer::reset_wifi_handler(httpd_req_t *req) {
-    ESP_LOGI(TAG, "uri: /reset");
-    WebServer* ws = get_context(req);
-    if (!ws) {
-        return ESP_FAIL;
+bool WebServer::is_on_async_worker_thread() {
+    TaskHandle_t selfHandle = xTaskGetCurrentTaskHandle();
+    for (int i = 0; i < MAX_ASYNC_REQUESTS; ++i) {
+        if (worker_handles[i] == selfHandle) {
+            return true;
+        }
+    }
+    return false;
+}
+
+esp_err_t WebServer::submit_async_req(httpd_req_t* req, httpd_req_handler_t handler) {
+    httpd_req_t* copied = nullptr;
+    esp_err_t error = httpd_req_async_handler_begin(req, &copied);
+    if (error != ESP_OK) {
+        return error;
     }
 
-    ws->webContext->wifiManager->clear();
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_sendstr(req, "{\"status\":\"OK\"}");
+    httpd_async_req_t asyncReq;
+    asyncReq.req = copied;
+    asyncReq.handler = handler;
 
+    if (xSemaphoreTake(worker_ready_count, 0) == pdFALSE) {
+        httpd_req_async_handler_complete(copied);
+        return ESP_FAIL;
+    }
+    if (xQueueSend(async_req_queue, &asyncReq, pdMS_TO_TICKS(100)) == pdFALSE) {
+        httpd_req_async_handler_complete(copied);
+        return ESP_FAIL;
+    }
     return ESP_OK;
 }
 
-esp_err_t WebServer::healthz_handler(httpd_req_t *req) {
-    WebServer* ws = get_context(req);
-    if (!ws) {
+esp_err_t WebServer::reset_wifi_handler(httpd_req_t* req) {
+    auto* ctx = static_cast<WebContext*>(req->user_ctx);
+    if (!ctx || !ctx->wifiManager) {
+        ESP_LOGE(TAG, "No valid WebContext/wifiManager");
+        httpd_resp_send_500(req);
+        return ESP_FAIL;
+    }
+    ctx->wifiManager->clear();
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"status\":\"OK\"}");
+    return ESP_OK;
+}
+
+esp_err_t WebServer::healthz_handler(httpd_req_t* req) {
+    auto* ctx = static_cast<WebContext*>(req->user_ctx);
+    if (!ctx) {
+        httpd_resp_send_500(req);
         return ESP_FAIL;
     }
 
-    uint64_t uptime_us = esp_timer_get_time();
-    uint32_t uptime_sec = static_cast<uint32_t>(uptime_us / 1000000ULL);
+    uint64_t uptimeUs = esp_timer_get_time();
+    uint32_t uptimeSec = static_cast<uint32_t>(uptimeUs / 1000000ULL);
 
     time_t now;
     time(&now);
-    struct tm time_info;
-    localtime_r(&now, &time_info);
+    struct tm timeInfo;
+    localtime_r(&now, &timeInfo);
 
-    char time_str[30];
-    strftime(time_str, sizeof(time_str), "%Y-%m-%dT%H:%M:%S%z", &time_info);
+    char timeBuffer[30];
+    strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%dT%H:%M:%S%z", &timeInfo);
 
     JsonWrapper json;
-    json.AddItem("uptime", uptime_sec);
-    json.AddItem("time", time_str);
+    json.AddItem("uptime", uptimeSec);
+    json.AddItem("time", timeBuffer);
 
-    std::string json_str = json.ToString();
+    std::string jsonStr = json.ToString();
     httpd_resp_set_type(req, "application/json");
-    httpd_resp_sendstr(req, json_str.c_str());
+    httpd_resp_sendstr(req, jsonStr.c_str());
     return ESP_OK;
 }
-
