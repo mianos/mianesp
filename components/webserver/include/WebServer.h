@@ -47,8 +47,8 @@ private:
     static esp_err_t submit_async_req(httpd_req_t *req, httpd_req_handler_t handler);
     static void start_async_req_workers();
     WebContext* webContext;
-    httpd_handle_t server;
 protected:
+    httpd_handle_t server;
     static WebServer* get_context(httpd_req_t* req);
 };
 
