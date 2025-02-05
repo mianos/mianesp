@@ -30,7 +30,6 @@ esp_err_t WebServer::start() {
     config.max_open_sockets = MAX_ASYNC_REQUESTS + 1;
 
     ESP_LOGI(TAG, "Starting server on port: %d", config.server_port);
-
     esp_err_t result = httpd_start(&server, &config);
     if (result != ESP_OK) {
         ESP_LOGE(TAG, "Error starting server!");
@@ -49,7 +48,9 @@ esp_err_t WebServer::start() {
         .uri       = "/healthz",
         .method    = HTTP_GET,
         .handler   = healthz_handler,
-        .user_ctx  = webContext
+        // Instead of storing 'webContext', we store 'this' so we can call
+        // populate_healthz_fields(...) in the base or derived class.
+        .user_ctx  = this
     };
     httpd_register_uri_handler(server, &healthzUri);
 
@@ -145,13 +146,40 @@ esp_err_t WebServer::submit_async_req(httpd_req_t* req, httpd_req_handler_t hand
     return ESP_OK;
 }
 
+// A helper to consistently return JSON error responses.
+esp_err_t WebServer::sendJsonError(httpd_req_t* req, int statusCode, const std::string& message) {
+    std::string statusString;
+    switch (statusCode) {
+        case 400: statusString = "400 Bad Request"; break;
+        case 404: statusString = "404 Not Found"; break;
+        case 500: statusString = "500 Internal Server Error"; break;
+        default:
+            statusString = std::to_string(statusCode);
+            break;
+    }
+    httpd_resp_set_status(req, statusString.c_str());
+    httpd_resp_set_type(req, "application/json");
+
+    JsonWrapper json;
+    json.AddItem("error", message);
+    json.AddItem("statusCode", statusCode);
+
+    std::string out = json.ToString();
+    httpd_resp_sendstr(req, out.c_str());
+    return ESP_FAIL;
+}
+
 esp_err_t WebServer::reset_wifi_handler(httpd_req_t* req) {
     auto* ctx = static_cast<WebContext*>(req->user_ctx);
-    if (!ctx || !ctx->wifiManager) {
-        ESP_LOGE(TAG, "No valid WebContext/wifiManager");
-        httpd_resp_send_500(req);
-        return ESP_FAIL;
+    if (!ctx) {
+        ESP_LOGE(TAG, "No valid WebContext");
+        return sendJsonError(req, 500, "Missing context");
     }
+    if (!ctx->wifiManager) {
+        ESP_LOGE(TAG, "No valid wifiManager");
+        return sendJsonError(req, 500, "Missing wifiManager");
+    }
+
     ctx->wifiManager->clear();
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, "{\"status\":\"OK\"}");
@@ -159,10 +187,12 @@ esp_err_t WebServer::reset_wifi_handler(httpd_req_t* req) {
 }
 
 esp_err_t WebServer::healthz_handler(httpd_req_t* req) {
-    auto* ctx = static_cast<WebContext*>(req->user_ctx);
-    if (!ctx) {
-        httpd_resp_send_500(req);
-        return ESP_FAIL;
+    auto* server = static_cast<WebServer*>(req->user_ctx);
+    if (!server) {
+        return sendJsonError(req, 500, "Missing WebServer");
+    }
+    if (!server->webContext) {
+        return sendJsonError(req, 500, "Missing WebContext");
     }
 
     uint64_t uptimeUs = esp_timer_get_time();
@@ -180,8 +210,12 @@ esp_err_t WebServer::healthz_handler(httpd_req_t* req) {
     json.AddItem("uptime", uptimeSec);
     json.AddItem("time", timeBuffer);
 
+    // Derived classes can override this to add custom fields to 'json'
+    server->populate_healthz_fields(json);
+
     std::string jsonStr = json.ToString();
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, jsonStr.c_str());
     return ESP_OK;
 }
+

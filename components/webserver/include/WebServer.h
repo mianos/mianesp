@@ -5,6 +5,7 @@
 #include <freertos/semphr.h>
 #include <freertos/task.h>
 #include "WifiManager.h"
+#include "JsonWrapper.h"
 
 struct WebContext {
     WiFiManager* wifiManager;
@@ -21,6 +22,14 @@ public:
 
     virtual esp_err_t start();
     esp_err_t stop();
+
+protected:
+    virtual void populate_healthz_fields(JsonWrapper& json) {}
+    static esp_err_t healthz_handler(httpd_req_t* req);
+	static esp_err_t sendJsonError(httpd_req_t* req, int statusCode, const std::string& message);
+
+    httpd_handle_t server;
+    WebContext* webContext;
 
 private:
     static constexpr int ASYNC_WORKER_TASK_PRIORITY = 5;
@@ -43,11 +52,6 @@ private:
     static esp_err_t submit_async_req(httpd_req_t* req, httpd_req_handler_t handler);
     static void start_async_req_workers();
 
-    static esp_err_t reset_wifi_handler(httpd_req_t* req);
-    static esp_err_t healthz_handler(httpd_req_t* req);
 
-protected:
-    httpd_handle_t server;
-    WebContext* webContext;
 };
 
