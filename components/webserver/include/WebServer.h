@@ -53,5 +53,8 @@ private:
     static void start_async_req_workers();
 
 
+	esp_err_t :reset_wifi_handler(httpd_req_t* req);
+
+
 };
 
