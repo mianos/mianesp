@@ -52,9 +52,6 @@ private:
     static esp_err_t submit_async_req(httpd_req_t* req, httpd_req_handler_t handler);
     static void start_async_req_workers();
 
-
-	static esp_err_t reset_wifi_handler(httpd_req_t* req);
-
-
+    static esp_err_t reset_wifi_handler(httpd_req_t* req);
 };
 
