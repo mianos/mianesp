@@ -24,7 +24,7 @@ public:
     esp_err_t stop();
 
 protected:
-    virtual void populate_healthz_fields(JsonWrapper& json) {}
+    virtual void populate_healthz_fields(WebContext *ctx, JsonWrapper& json) {}
     static esp_err_t healthz_handler(httpd_req_t* req);
 	static esp_err_t sendJsonError(httpd_req_t* req, int statusCode, const std::string& message);
 

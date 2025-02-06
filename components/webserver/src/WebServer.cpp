@@ -211,7 +211,7 @@ esp_err_t WebServer::healthz_handler(httpd_req_t* req) {
     json.AddItem("time", timeBuffer);
 
     // Derived classes can override this to add custom fields to 'json'
-    server->populate_healthz_fields(json);
+    server->populate_healthz_fields(server->webContext, json);
 
     std::string jsonStr = json.ToString();
     httpd_resp_set_type(req, "application/json");
