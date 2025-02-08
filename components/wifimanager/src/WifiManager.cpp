@@ -185,3 +185,7 @@ bool WiFiManager::loadHostname(std::string& hostname) {
     return storageManager.retrieve("hostname", hostname);
 }
 
+void WiFiManager::configSetHostName(std::string& hostname) {
+	setHostname(hostname); 
+	saveHostname(hostname);
+}

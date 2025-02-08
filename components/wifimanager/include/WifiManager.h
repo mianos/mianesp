@@ -18,6 +18,7 @@ public:
 				bool clear_settings=false);
     ~WiFiManager();
 	void clear();
+	void configSetHostName(std::string& hostname);
 private:
     static void localEventHandler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
     static void smartConfigTask(void* param);

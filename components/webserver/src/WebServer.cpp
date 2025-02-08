@@ -44,6 +44,14 @@ esp_err_t WebServer::start() {
     };
     httpd_register_uri_handler(server, &resetWifiUri);
 
+    httpd_uri_t setHostnameUri {
+        .uri       = "/set_hostname",
+        .method    = HTTP_POST,
+        .handler   = set_hostname_handler,
+        .user_ctx  = webContext
+    };
+    httpd_register_uri_handler(server, &setHostnameUri);
+
     httpd_uri_t healthzUri {
         .uri       = "/healthz",
         .method    = HTTP_GET,
@@ -219,3 +227,46 @@ esp_err_t WebServer::healthz_handler(httpd_req_t* req) {
     return ESP_OK;
 }
 
+esp_err_t WebServer::set_hostname_handler(httpd_req_t* req) {
+    auto* ctx = static_cast<WebContext*>(req->user_ctx);
+    if (!ctx) {
+        ESP_LOGE(TAG, "No valid WebContext");
+        return sendJsonError(req, 500, "Missing context");
+    }
+    if (!ctx->wifiManager) {
+        ESP_LOGE(TAG, "No valid wifiManager");
+        return sendJsonError(req, 500, "Missing wifiManager");
+    }
+    size_t contentLen = request->content_len;
+    if (contentLen == 0) {
+        return sendJsonError(request, 400, "Content-Length required");
+    }
+
+    std::string body;
+    body.resize(contentLen);
+    int ret = httpd_req_recv(request, &body[0], contentLen);
+    if (ret <= 0) {
+        return sendJsonError(request, 400, "Failed to read request body");
+    }
+
+    JsonWrapper json = JsonWrapper::Parse(body);
+    if (json.Empty()) {
+        return sendJsonError(request, 400, "Invalid JSON");
+    }
+
+	std::string host_name;
+    if (!json.GetField("host_name", host_name, true)) {
+		return sendJsonError(request, 400, "Missing or invalid 'host_name'");
+	}
+
+	ctx->wifiManager->saveHostname(host_name);
+	// reboot
+
+    JsonWrapper response;
+    response.AddItem("status", "OK");
+	response.AddItem("host_name", host_name);
+    std::string responseStr = response.ToString();
+    httpd_resp_set_type(request, "application/json");
+    httpd_resp_sendstr(request, responseStr.c_str());
+    return ESP_OK;
+}
