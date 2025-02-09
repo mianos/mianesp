@@ -21,7 +21,9 @@ WiFiManager::WiFiManager(NvsStorageManager& storageManager,
     wifi_event_group = xEventGroupCreate();
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
-    esp_netif_t* netif = esp_netif_create_default_wifi_sta();
+	// netid not used by me in wifi, only for ethernet.
+    //esp_netif_t* netif = esp_netif_create_default_wifi_sta();
+    esp_netif_create_default_wifi_sta();
 
     // Load and set hostname from NVS if available
     std::string savedHostname;
