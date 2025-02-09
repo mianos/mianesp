@@ -237,36 +237,36 @@ esp_err_t WebServer::set_hostname_handler(httpd_req_t* req) {
         ESP_LOGE(TAG, "No valid wifiManager");
         return sendJsonError(req, 500, "Missing wifiManager");
     }
-    size_t contentLen = request->content_len;
+    size_t contentLen = req->content_len;
     if (contentLen == 0) {
-        return sendJsonError(request, 400, "Content-Length required");
+        return sendJsonError(req, 400, "Content-Length required");
     }
 
     std::string body;
     body.resize(contentLen);
-    int ret = httpd_req_recv(request, &body[0], contentLen);
+    int ret = httpd_req_recv(req, &body[0], contentLen);
     if (ret <= 0) {
-        return sendJsonError(request, 400, "Failed to read request body");
+        return sendJsonError(req, 400, "Failed to read request body");
     }
 
     JsonWrapper json = JsonWrapper::Parse(body);
     if (json.Empty()) {
-        return sendJsonError(request, 400, "Invalid JSON");
+        return sendJsonError(req, 400, "Invalid JSON");
     }
 
 	std::string host_name;
     if (!json.GetField("host_name", host_name, true)) {
-		return sendJsonError(request, 400, "Missing or invalid 'host_name'");
+		return sendJsonError(req, 400, "Missing or invalid 'host_name'");
 	}
 
-	ctx->wifiManager->saveHostname(host_name);
-	// reboot
+	ctx->wifiManager->configSetHostName(host_name);
+	// reboot ?
 
     JsonWrapper response;
     response.AddItem("status", "OK");
 	response.AddItem("host_name", host_name);
     std::string responseStr = response.ToString();
-    httpd_resp_set_type(request, "application/json");
-    httpd_resp_sendstr(request, responseStr.c_str());
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, responseStr.c_str());
     return ESP_OK;
 }
