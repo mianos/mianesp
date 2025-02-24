@@ -1,3 +1,3 @@
 idf_component_register(INCLUDE_DIRS "include"
                        REQUIRES esp_https_ota
-                                esp_system))
+                                esp_system)
