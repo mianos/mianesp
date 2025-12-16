@@ -23,7 +23,6 @@ HttpClient::HttpClient(HttpClient&& other) noexcept
 
 }
 
-
 HttpClient& HttpClient::operator=(HttpClient&& other) noexcept {
     if (this != &other) {
         url = std::move(other.url);
@@ -38,7 +37,29 @@ void HttpClient::setTimeout(int milliseconds) {
     timeout = milliseconds;
 }
 
-// Perform an HTTP POST request with local client initialization and cleanup.
+// Perform an HTTP GET request
+std::pair<bool, std::string> HttpClient::get() {
+    // Clear previous response
+    responseBuffer.clear();
+
+    esp_http_client_config_t config = {};
+    config.url = url.c_str();
+    config.event_handler = HttpClient::handleHttpEvent;
+    config.user_data = this;
+    config.timeout_ms = timeout;
+    config.method = HTTP_METHOD_GET;
+
+    auto* client = esp_http_client_init(&config);
+    if (!client) {
+        ESP_LOGE(TAG, "Failed to initialize HTTP client for GET");
+        return {false, ""};
+    }
+
+    // performRequest handles the execute and cleanup
+    return performRequest(client);
+}
+
+// Perform an HTTP POST request
 std::pair<bool, std::string> HttpClient::post(const std::string& postData) {
     // Clear previous response
     responseBuffer.clear();
@@ -48,27 +69,33 @@ std::pair<bool, std::string> HttpClient::post(const std::string& postData) {
     config.event_handler = HttpClient::handleHttpEvent;
     config.user_data = this;
     config.timeout_ms = timeout;
+    config.method = HTTP_METHOD_POST;
 
     auto* client = esp_http_client_init(&config);
     if (!client) {
-        ESP_LOGE(TAG, "Failed to initialize HTTP client");
+        ESP_LOGE(TAG, "Failed to initialize HTTP client for POST");
         return {false, ""};
     }
 
-    esp_http_client_set_url(client, url.c_str());
-    esp_http_client_set_method(client, HTTP_METHOD_POST);
     esp_http_client_set_post_field(client, postData.c_str(), postData.size());
 
+    // performRequest handles the execute and cleanup
+    return performRequest(client);
+}
+
+// Private helper to execute request and cleanup
+std::pair<bool, std::string> HttpClient::performRequest(esp_http_client_handle_t client) {
     esp_err_t err = esp_http_client_perform(client);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "HTTP POST failed: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "HTTP Request failed: %s", esp_err_to_name(err));
         esp_http_client_cleanup(client);
         return {false, ""};
     }
 
     int statusCode = esp_http_client_get_status_code(client);
-    if (statusCode != 200) {
-        ESP_LOGE(TAG, "HTTP POST returned status code: %d", statusCode);
+    // You might want to accept other 2xx codes, but strict 200 is generally fine for REST APIs
+    if (statusCode < 200 || statusCode >= 300) {
+        ESP_LOGE(TAG, "HTTP Request returned status code: %d", statusCode);
         esp_http_client_cleanup(client);
         return {false, ""};
     }
@@ -98,4 +125,3 @@ esp_err_t HttpClient::handleHttpEvent(esp_http_client_event_t* evt) {
 
     return ESP_OK;
 }
-

@@ -7,7 +7,7 @@
 
 /**
  * A modern C++ wrapper for ESP-IDF's HTTP client.
- * Designed for simple POST requests with proper error handling.
+ * Supports simple GET and POST requests with proper error handling.
  */
 class HttpClient {
 public:
@@ -32,8 +32,16 @@ public:
      */
     std::pair<bool, std::string> post(const std::string& postData);
 
+    /**
+     * Sends an HTTP GET request.
+     * @return Pair containing the success status and the response data.
+     */
+    std::pair<bool, std::string> get();
+
 private:
-    esp_http_client_handle_t client = nullptr;
+    // Helper to perform the request execution to avoid code duplication
+    std::pair<bool, std::string> performRequest(esp_http_client_handle_t client);
+
     std::string url;
     int timeout = 5000; // Default timeout (milliseconds)
     std::vector<char> responseBuffer;
