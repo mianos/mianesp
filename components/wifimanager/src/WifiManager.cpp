@@ -2,7 +2,7 @@
 #include "esp_netif.h"
 #include "esp_system.h"
 
-#include <network_provisioning/network_prov_mgr.h>
+#include <network_provisioning/manager.h>
 
 #include "wifimanager.h"
 
