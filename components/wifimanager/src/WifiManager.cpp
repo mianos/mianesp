@@ -2,7 +2,7 @@
 #include "esp_netif.h"
 #include "esp_system.h"
 
-#include <wifi_provisioning/manager.h>
+#include <network_provisioning/network_prov_mgr.h>
 
 #include "wifimanager.h"
 
@@ -76,7 +76,7 @@ void WiFiManager::localEventHandler(void* arg, esp_event_base_t event_base, int3
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
         ESP_LOGI(TAG, "INTO WIFI START EVENT");
         bool provisioned = false;
-        ESP_ERROR_CHECK(wifi_prov_mgr_is_provisioned(&provisioned));
+        ESP_ERROR_CHECK(network_prov_mgr_is_wifi_provisioned(&provisioned));
         if (!provisioned) {
             ESP_LOGI(TAG, "Not provisioned");
             xTaskCreate(smartConfigTask, "smartConfigTask", 4096, NULL, 3, NULL);
@@ -174,7 +174,7 @@ void WiFiManager::smartConfigTask(void* param) {
 }
 
 void WiFiManager::clear() {
-	wifi_prov_mgr_reset_provisioning();
+	network_prov_mgr_reset_wifi_provisioning();
 	ESP_LOGI(TAG, "WiFi credentials cleared.");
 	esp_restart();
 }
