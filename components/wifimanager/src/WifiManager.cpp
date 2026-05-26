@@ -133,12 +133,13 @@ void WiFiManager::localEventHandler(void* arg, esp_event_base_t event_base, int3
             char hostname[33] = {0};  // Hostname buffer (max 32 chars + null terminator)
             memcpy(hostname, rvd_data, sizeof(hostname) - 1);
             hostname[sizeof(hostname) - 1] = '\0';
-            ESP_LOGI(TAG, "Hostname received: %s", hostname);
-
-            instance->setHostname(hostname);  // Use instance to call setHostname
-
-            // Save the hostname to NVS using the instance
-            instance->saveHostname(hostname);
+            if (hostname[0] != '\0') {
+                ESP_LOGI(TAG, "Hostname received: %s", hostname);
+                instance->setHostname(hostname);
+                instance->saveHostname(hostname);
+            } else {
+                ESP_LOGI(TAG, "Hostname field empty, keeping existing hostname");
+            }
         }
 
         ESP_ERROR_CHECK(esp_wifi_disconnect());  // Disconnect if already connected
