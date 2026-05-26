@@ -131,7 +131,8 @@ void WiFiManager::localEventHandler(void* arg, esp_event_base_t event_base, int3
             ESP_ERROR_CHECK(esp_smartconfig_get_rvd_data(rvd_data, sizeof(rvd_data)));
 
             char hostname[33] = {0};  // Hostname buffer (max 32 chars + null terminator)
-            strncpy(hostname, (char*)rvd_data, sizeof(hostname) - 1);
+            memcpy(hostname, rvd_data, sizeof(hostname) - 1);
+            hostname[sizeof(hostname) - 1] = '\0';
             ESP_LOGI(TAG, "Hostname received: %s", hostname);
 
             instance->setHostname(hostname);  // Use instance to call setHostname
