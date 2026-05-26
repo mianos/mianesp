@@ -1,2 +1,4 @@
 version: "0.0.1"
-description: "Simple c++ wrapepr around cJson"
+description: "Simple c++ wrapper around cJson"
+dependencies:
+  espressif/cjson: "*"
