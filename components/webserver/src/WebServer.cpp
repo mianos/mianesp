@@ -28,6 +28,9 @@ esp_err_t WebServer::start() {
     config.lru_purge_enable = true;
     config.server_port = 80;
     config.max_open_sockets = MAX_ASYNC_REQUESTS + 1;
+    // Default is 8; derived servers (e.g. robofoc) register more than the base
+    // /reset + /set_hostname + /healthz, so give the table generous headroom.
+    config.max_uri_handlers = 16;
 
     ESP_LOGI(TAG, "Starting server on port: %d", config.server_port);
     esp_err_t result = httpd_start(&server, &config);
