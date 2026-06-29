@@ -86,7 +86,12 @@ public:
 
 		cJSON* item = cJSON_GetObjectItem(jsonObj_.get(), key.c_str());
 		if (!item) {
-			return !mandatory;  // Return false if the field is mandatory, true otherwise
+			// Return false in either case: a true return must mean "value was
+			// written". The mandatory flag is retained for callers that want
+			// to differentiate via logging, but it no longer changes the
+			// return value when the field is absent.
+			(void)mandatory;
+			return false;
 		}
 
 		if constexpr (std::is_same_v<T, bool>) {

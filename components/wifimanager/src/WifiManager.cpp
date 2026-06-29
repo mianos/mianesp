@@ -2,7 +2,7 @@
 #include "esp_netif.h"
 #include "esp_system.h"
 
-#include <wifi_provisioning/manager.h>
+#include <network_provisioning/manager.h>
 
 #include "wifimanager.h"
 
@@ -76,7 +76,7 @@ void WiFiManager::localEventHandler(void* arg, esp_event_base_t event_base, int3
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
         ESP_LOGI(TAG, "INTO WIFI START EVENT");
         bool provisioned = false;
-        ESP_ERROR_CHECK(wifi_prov_mgr_is_provisioned(&provisioned));
+        ESP_ERROR_CHECK(network_prov_mgr_is_wifi_provisioned(&provisioned));
         if (!provisioned) {
             ESP_LOGI(TAG, "Not provisioned");
             xTaskCreate(smartConfigTask, "smartConfigTask", 4096, NULL, 3, NULL);
@@ -131,13 +131,15 @@ void WiFiManager::localEventHandler(void* arg, esp_event_base_t event_base, int3
             ESP_ERROR_CHECK(esp_smartconfig_get_rvd_data(rvd_data, sizeof(rvd_data)));
 
             char hostname[33] = {0};  // Hostname buffer (max 32 chars + null terminator)
-            strncpy(hostname, (char*)rvd_data, sizeof(hostname) - 1);
-            ESP_LOGI(TAG, "Hostname received: %s", hostname);
-
-            instance->setHostname(hostname);  // Use instance to call setHostname
-
-            // Save the hostname to NVS using the instance
-            instance->saveHostname(hostname);
+            memcpy(hostname, rvd_data, sizeof(hostname) - 1);
+            hostname[sizeof(hostname) - 1] = '\0';
+            if (hostname[0] != '\0') {
+                ESP_LOGI(TAG, "Hostname received: %s", hostname);
+                instance->setHostname(hostname);
+                instance->saveHostname(hostname);
+            } else {
+                ESP_LOGI(TAG, "Hostname field empty, keeping existing hostname");
+            }
         }
 
         ESP_ERROR_CHECK(esp_wifi_disconnect());  // Disconnect if already connected
@@ -174,7 +176,7 @@ void WiFiManager::smartConfigTask(void* param) {
 }
 
 void WiFiManager::clear() {
-	wifi_prov_mgr_reset_provisioning();
+	network_prov_mgr_reset_wifi_provisioning();
 	ESP_LOGI(TAG, "WiFi credentials cleared.");
 	esp_restart();
 }
