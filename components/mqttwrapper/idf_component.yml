@@ -7,8 +7,8 @@ dependencies:
   jsonwrapper:
     git: git@github.com:mianos/mianesp.git
     path: components/jsonwrapper
-    version: idf6-network-provisioning
+    version: main
   nvsstoragemanager:
     git: git@github.com:mianos/mianesp.git
     path: components/nvsstoragemanager
-    version: idf6-network-provisioning
+    version: main
