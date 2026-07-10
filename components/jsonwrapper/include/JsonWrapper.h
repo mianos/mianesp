@@ -120,7 +120,11 @@ private:
 
 	template<typename T>
 	void addItemInternal(const std::string& key, const T& value) {
-		if constexpr (std::is_integral_v<T>) {
+		// bool is integral in C++ — without its own branch it would serialize
+		// as 1/0, which GetField<bool> (cJSON_IsBool) then refuses to read.
+		if constexpr (std::is_same_v<T, bool>) {
+			cJSON_AddBoolToObject(jsonObj_.get(), key.c_str(), value);
+		} else if constexpr (std::is_integral_v<T>) {
 			cJSON_AddNumberToObject(jsonObj_.get(), key.c_str(), static_cast<double>(value));
 		} else if constexpr (std::is_floating_point_v<T>) {
 			double roundedValue = std::round(value * std::pow(10, floatDecimals)) / std::pow(10, floatDecimals);
