@@ -21,6 +21,7 @@ directly from this repo via the ESP-IDF component manager.
 | [`webserver`](components/webserver) | `WebServer.h` | HTTP server base class with async workers and built-in endpoints (see below) | `esp_http_server`, `esp_timer`, `wifimanager`, `jsonwrapper` |
 | [`httpclient`](components/httpclient) | `HttpClient.h` | Move-only wrapper over the ESP-IDF HTTP client for simple GET/POST | `esp_http_client` |
 | [`mqttwrapper`](components/mqttwrapper) | `MqttClient.h` | MQTT client with regex topic-routing, offline queueing and auto-resubscribe | `espressif/mqtt`, `espressif/cjson`, `nvsstoragemanager`, `jsonwrapper` |
+| [`audioplayer`](components/audioplayer) | `AudioPlayer.h` | Streaming MP3-over-HTTP player (GET or JSON POST, e.g. TTS): queue + dedicated task, jitter-buffered, Helix decode to I2S | `esp_driver_i2s`, `esp_http_client`, `chmorgan/esp-libhelix-mp3` |
 | [`otawrapper`](components/otawrapper) | `Ota.h` | Background HTTPS OTA with progress callbacks and auto-restart | `esp_https_ota`, `esp_system` |
 | [`button`](components/button) | `Button.h` | Debounced GPIO button with long-press detection (header-only) | `driver`, `esp_timer` |
 
