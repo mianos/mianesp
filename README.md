@@ -22,13 +22,15 @@ directly from this repo via the ESP-IDF component manager.
 | [`httpclient`](components/httpclient) | `HttpClient.h` | Move-only wrapper over the ESP-IDF HTTP client for simple GET/POST | `esp_http_client` |
 | [`mqttwrapper`](components/mqttwrapper) | `MqttClient.h` | MQTT client with regex topic-routing, offline queueing and auto-resubscribe | `espressif/mqtt`, `espressif/cjson`, `nvsstoragemanager`, `jsonwrapper` |
 | [`audioplayer`](components/audioplayer) | `AudioPlayer.h` | Streaming MP3-over-HTTP player (GET or JSON POST, e.g. TTS): queue + dedicated task, jitter-buffered, Helix decode to I2S | `esp_driver_i2s`, `esp_http_client`, `chmorgan/esp-libhelix-mp3` |
+| [`settingsbase`](components/settingsbase) | `SettingsBase.h` | NVS-backed app settings base: subclass declares members, registers fields, gets load/save/reset/log + per-field change callbacks (header-only) | `jsonwrapper`, `nvsstoragemanager` |
 | [`otawrapper`](components/otawrapper) | `Ota.h` | Background HTTPS OTA with progress callbacks and auto-restart | `esp_https_ota`, `esp_system` |
 | [`button`](components/button) | `Button.h` | Debounced GPIO button with long-press detection (header-only) | `driver`, `esp_timer` |
 
 ### Inter-component dependencies
 
 `webserver` requires `wifimanager` + `jsonwrapper`; `wifimanager` requires
-`nvsstoragemanager`; `mqttwrapper` requires `nvsstoragemanager` + `jsonwrapper`.
+`nvsstoragemanager`; `mqttwrapper` and `settingsbase` require
+`nvsstoragemanager` + `jsonwrapper`.
 When consumed over git, these transitive deps are resolved from **the same repo
 on `main`** (see each component's `idf_component.yml`).
 

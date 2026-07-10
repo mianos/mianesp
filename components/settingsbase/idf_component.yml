@@ -1,0 +1,12 @@
+name: "settingsbase"
+version: "0.0.1"
+description: "NVS-backed app settings base: declare members, register fields, get load/save/reset/log"
+dependencies:
+  jsonwrapper:
+    git: git@github.com:mianos/mianesp.git
+    path: components/jsonwrapper
+    version: main
+  nvsstoragemanager:
+    git: git@github.com:mianos/mianesp.git
+    path: components/nvsstoragemanager
+    version: main
