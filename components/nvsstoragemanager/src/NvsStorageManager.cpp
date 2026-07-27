@@ -1,6 +1,5 @@
 #include "nvs_flash.h"
 #include "esp_log.h"
-#include <cstring> // For memset and other string operations
 
 #include "NvsStorageManager.h"
 
@@ -48,20 +47,27 @@ bool NvsStorageManager::retrieve(const std::string& key, std::string& value) con
     esp_err_t err = nvs_open(ns.c_str(), NVS_READONLY, &nvs_handle);
     if (err != ESP_OK) return false;
 
-    // Initialize buffer to a large size to accommodate most value sizes
-    char value_buff[512];
-    size_t value_size = sizeof(value_buff);
-    memset(value_buff, 0, value_size);
-
-    err = nvs_get_str(nvs_handle, key.c_str(), value_buff, &value_size);
+    // Query the stored size first rather than guessing a fixed buffer: a
+    // value longer than any hardcoded guess would otherwise fail with
+    // ESP_ERR_NVS_INVALID_LENGTH, indistinguishable from "key not found".
+    size_t value_size = 0;
+    err = nvs_get_str(nvs_handle, key.c_str(), nullptr, &value_size);
     if (err != ESP_OK) {
         nvs_close(nvs_handle);
-		ESP_LOGI(TAG, "Did not get NVS value '%s'", key.c_str());
+        ESP_LOGI(TAG, "Did not get NVS value '%s'", key.c_str());
         return false;
     }
 
-    value = std::string(value_buff);
+    std::string buf(value_size, '\0');  // value_size includes the null terminator
+    err = nvs_get_str(nvs_handle, key.c_str(), buf.data(), &value_size);
     nvs_close(nvs_handle);
+    if (err != ESP_OK) {
+        ESP_LOGI(TAG, "Did not get NVS value '%s'", key.c_str());
+        return false;
+    }
+
+    if (!buf.empty() && buf.back() == '\0') buf.pop_back();
+    value = std::move(buf);
     return true;
 }
 
