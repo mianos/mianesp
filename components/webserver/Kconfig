@@ -1,0 +1,13 @@
+menu "mianesp web server"
+
+    config WEBSERVER_TASK_STACK_SIZE
+        int "HTTP server task stack size (bytes)"
+        default 4096
+        range 3072 32768
+        help
+            Stack for the esp_http_server task, which runs every URI handler
+            that isn't handed to an async worker. 4096 is ESP-IDF's default.
+            Raise it for handlers that do heavy work inline, such as receiving
+            and verifying an OTA image.
+
+endmenu
