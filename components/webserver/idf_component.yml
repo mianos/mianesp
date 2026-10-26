@@ -14,8 +14,4 @@ dependencies:
     git: git@github.com:mianos/mianesp.git
     path: components/nvsstoragemanager
     version: main
-  button:
-    git: git@github.com:mianos/mianesp.git
-    path: components/button
-    version: main
 
