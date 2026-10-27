@@ -6,4 +6,5 @@ idf_component_register(SRCS "src/WebServer.cpp"
      jsonwrapper
      esp_http_server
      esp_timer
+     lwip
 )

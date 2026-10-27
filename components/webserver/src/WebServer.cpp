@@ -4,7 +4,9 @@
 #include <vector>
 #include <cstring>
 #include <string>
+#include "cJSON.h"
 #include "esp_random.h"
+#include "lwip/sockets.h"
 #include "esp_timer.h"
 #include "sdkconfig.h"
 
@@ -66,6 +68,14 @@ esp_err_t WebServer::start() {
         .user_ctx  = this
     };
     httpd_register_uri_handler(server, &healthzUri);
+
+    // The built-in replies are plain text; keep every error in the JSON shape.
+    httpd_register_err_handler(server, HTTPD_404_NOT_FOUND, [](httpd_req_t* req, httpd_err_code_t) {
+        return sendJsonError(req, 404, std::string("no such endpoint: ") + req->uri);
+    });
+    httpd_register_err_handler(server, HTTPD_405_METHOD_NOT_ALLOWED, [](httpd_req_t* req, httpd_err_code_t) {
+        return sendJsonError(req, 405, std::string("method not allowed on ") + req->uri);
+    });
 
     return ESP_OK;
 }
@@ -159,27 +169,87 @@ esp_err_t WebServer::submit_async_req(httpd_req_t* req, httpd_req_handler_t hand
     return ESP_OK;
 }
 
-// A helper to consistently return JSON error responses.
-esp_err_t WebServer::sendJsonError(httpd_req_t* req, int statusCode, const std::string& message) {
-    std::string statusString;
+// The status line needs a reason phrase; a bare number is malformed HTTP.
+static const char* statusLine(int statusCode) {
     switch (statusCode) {
-        case 400: statusString = "400 Bad Request"; break;
-        case 404: statusString = "404 Not Found"; break;
-        case 500: statusString = "500 Internal Server Error"; break;
-        default:
-            statusString = std::to_string(statusCode);
-            break;
+        case 200: return "200 OK";
+        case 202: return "202 Accepted";
+        case 400: return "400 Bad Request";
+        case 404: return "404 Not Found";
+        case 405: return "405 Method Not Allowed";
+        case 409: return "409 Conflict";
+        case 413: return "413 Payload Too Large";
+        case 422: return "422 Unprocessable Entity";
+        case 503: return "503 Service Unavailable";
+        case 504: return "504 Gateway Timeout";
+        default:  return "500 Internal Server Error";
     }
-    httpd_resp_set_status(req, statusString.c_str());
-    httpd_resp_set_type(req, "application/json");
+}
 
+esp_err_t WebServer::sendJson(httpd_req_t* req, const JsonWrapper& json, int statusCode) {
+    httpd_resp_set_status(req, statusLine(statusCode));
+    httpd_resp_set_type(req, "application/json");
+    const std::string out = json.ToString();
+    return httpd_resp_sendstr(req, out.c_str());
+}
+
+esp_err_t WebServer::sendJsonError(httpd_req_t* req, int statusCode, const std::string& message) {
     JsonWrapper json;
     json.AddItem("error", message);
     json.AddItem("statusCode", statusCode);
-
-    std::string out = json.ToString();
-    httpd_resp_sendstr(req, out.c_str());
+    sendJson(req, json, statusCode);
     return ESP_FAIL;
+}
+
+bool WebServer::readJsonBody(httpd_req_t* req, JsonWrapper& out, size_t maxBytes) {
+    if (req->content_len <= 0) {
+        sendJsonError(req, 400, "JSON body required");
+        return false;
+    }
+    if (static_cast<size_t>(req->content_len) > maxBytes) {
+        sendJsonError(req, 413, "request body too large");
+        return false;
+    }
+    std::string body(req->content_len, '\0');
+    int received = 0;
+    while (received < static_cast<int>(req->content_len)) {
+        int got = httpd_req_recv(req, body.data() + received, req->content_len - received);
+        if (got == HTTPD_SOCK_ERR_TIMEOUT) continue;
+        if (got <= 0) {
+            sendJsonError(req, 400, "request body truncated");
+            return false;
+        }
+        received += got;
+    }
+    cJSON* parsed = cJSON_Parse(body.c_str());
+    const bool isObject = parsed != nullptr && cJSON_IsObject(parsed);
+    cJSON_Delete(parsed);
+    if (!isObject) {
+        sendJsonError(req, 400, "invalid JSON (expected an object)");
+        return false;
+    }
+    out = JsonWrapper::Parse(body);
+    return true;
+}
+
+std::string WebServer::callerAddress(httpd_req_t* req) {
+    struct sockaddr_in6 addr = {};
+    socklen_t len = sizeof(addr);
+    if (getpeername(httpd_req_to_sockfd(req), reinterpret_cast<struct sockaddr*>(&addr), &len) != 0) {
+        return "?";
+    }
+    char buf[INET6_ADDRSTRLEN] = {};
+    if (addr.sin6_family == AF_INET) {
+        inet_ntop(AF_INET, &reinterpret_cast<struct sockaddr_in*>(&addr)->sin_addr, buf, sizeof(buf));
+        return buf;
+    }
+    inet_ntop(AF_INET6, &addr.sin6_addr, buf, sizeof(buf));
+    std::string s(buf);
+    // The server socket is dual-stack, so IPv4 peers arrive v4-mapped.
+    for (const char* prefix : {"::FFFF:", "::ffff:"}) {
+        if (s.rfind(prefix, 0) == 0) return s.substr(7);
+    }
+    return s;
 }
 
 esp_err_t WebServer::reset_wifi_handler(httpd_req_t* req) {
@@ -193,10 +263,11 @@ esp_err_t WebServer::reset_wifi_handler(httpd_req_t* req) {
         return sendJsonError(req, 500, "Missing wifiManager");
     }
 
+    ESP_LOGW(TAG, "POST /reset from %s: clearing Wi-Fi credentials", callerAddress(req).c_str());
     ctx->wifiManager->clear();
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_sendstr(req, "{\"status\":\"OK\"}");
-    return ESP_OK;
+    JsonWrapper response;
+    response.AddItem("wifi_cleared", true);
+    return sendJson(req, response);
 }
 
 esp_err_t WebServer::healthz_handler(httpd_req_t* req) {
@@ -226,10 +297,7 @@ esp_err_t WebServer::healthz_handler(httpd_req_t* req) {
     // Derived classes can override this to add custom fields to 'json'
     server->populate_healthz_fields(server->webContext, json);
 
-    std::string jsonStr = json.ToString();
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_sendstr(req, jsonStr.c_str());
-    return ESP_OK;
+    return sendJson(req, json);
 }
 
 esp_err_t WebServer::set_hostname_handler(httpd_req_t* req) {
@@ -242,36 +310,18 @@ esp_err_t WebServer::set_hostname_handler(httpd_req_t* req) {
         ESP_LOGE(TAG, "No valid wifiManager");
         return sendJsonError(req, 500, "Missing wifiManager");
     }
-    size_t contentLen = req->content_len;
-    if (contentLen == 0) {
-        return sendJsonError(req, 400, "Content-Length required");
-    }
-
-    std::string body;
-    body.resize(contentLen);
-    int ret = httpd_req_recv(req, &body[0], contentLen);
-    if (ret <= 0) {
-        return sendJsonError(req, 400, "Failed to read request body");
-    }
-
-    JsonWrapper json = JsonWrapper::Parse(body);
-    if (json.Empty()) {
-        return sendJsonError(req, 400, "Invalid JSON");
-    }
+    JsonWrapper json;
+    if (!readJsonBody(req, json)) return ESP_FAIL;
 
 	std::string host_name;
     if (!json.GetField("host_name", host_name, true)) {
 		return sendJsonError(req, 400, "Missing or invalid 'host_name'");
 	}
 
+    ESP_LOGW(TAG, "POST /set_hostname from %s: %s", callerAddress(req).c_str(), host_name.c_str());
 	ctx->wifiManager->configSetHostName(host_name);
-	// reboot ?
 
     JsonWrapper response;
-    response.AddItem("status", "OK");
 	response.AddItem("host_name", host_name);
-    std::string responseStr = response.ToString();
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_sendstr(req, responseStr.c_str());
-    return ESP_OK;
+    return sendJson(req, response);
 }

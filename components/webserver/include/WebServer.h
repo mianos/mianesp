@@ -1,4 +1,5 @@
 #pragma once
+#include <string>
 #include <esp_http_server.h>
 #include <esp_log.h>
 #include <freertos/FreeRTOS.h>
@@ -26,7 +27,16 @@ public:
 protected:
     virtual void populate_healthz_fields(WebContext *ctx, JsonWrapper& json) {}
     static esp_err_t healthz_handler(httpd_req_t* req);
+
+    // REST conventions shared by every device: success is 2xx with the
+    // resulting state as the body; failure is {"error", "statusCode"}.
 	static esp_err_t sendJsonError(httpd_req_t* req, int statusCode, const std::string& message);
+    static esp_err_t sendJson(httpd_req_t* req, const JsonWrapper& json, int statusCode = 200);
+    // Reads and parses a JSON object body. On failure the error reply (400 or
+    // 413) has already been sent and false is returned.
+    static bool readJsonBody(httpd_req_t* req, JsonWrapper& out, size_t maxBytes = 4096);
+    // Peer address of the request, for logging who changed what.
+    static std::string callerAddress(httpd_req_t* req);
 
     httpd_handle_t server;
     WebContext* webContext;
