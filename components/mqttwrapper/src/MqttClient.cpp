@@ -11,6 +11,13 @@ static const char* TAG = "MqttClient";
 
 MqttClient::MqttClient(esp_mqtt_client_config_t& mqtt_cfg, std::string sensorName)
         : sensorName(sensorName) {
+    if (mqtt_cfg.session.last_will.topic == nullptr) {
+        statusTopic = "tele/" + this->sensorName + "/LWT";
+        mqtt_cfg.session.last_will.topic  = statusTopic.c_str();
+        mqtt_cfg.session.last_will.msg    = "Offline";
+        mqtt_cfg.session.last_will.qos    = 1;
+        mqtt_cfg.session.last_will.retain = 1;
+    }
     client = esp_mqtt_client_init(&mqtt_cfg);
     esp_mqtt_client_register_event(client,
 								static_cast<esp_mqtt_event_id_t>(ESP_EVENT_ANY_ID),
@@ -101,6 +108,10 @@ void MqttClient::mqtt_event_handler(void* handler_args, esp_event_base_t base, i
     case MQTT_EVENT_CONNECTED:
         ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
         clientInstance->connected_.store(true);
+        if (!clientInstance->statusTopic.empty()) {
+            esp_mqtt_client_publish(clientInstance->client, clientInstance->statusTopic.c_str(),
+                                    "Online", 0, 1, 1);
+        }
         clientInstance->resubscribe();
 		clientInstance->flushMessageQueue();
         break;

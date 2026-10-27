@@ -27,6 +27,9 @@ struct HandlerBinding {
 class MqttClient {
 public:
 	std::string sensorName;
+	// Retained "Online"/"Offline" on tele/<sensorName>/LWT; the broker sends
+	// "Offline" when the connection dies. Skipped if the caller set its own will.
+	std::string statusTopic;
 
 	MqttClient(esp_mqtt_client_config_t& mqtt_cfg, std::string sensorName);
     ~MqttClient();
