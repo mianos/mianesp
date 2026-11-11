@@ -68,6 +68,14 @@ public:
         addItemInternal(key, value);
     }
 
+    // JSON null, for a field that exists but has no value yet.
+    void AddNull(const std::string& key) {
+        if (!jsonObj_) {
+            jsonObj_.reset(cJSON_CreateObject());
+        }
+        cJSON_AddNullToObject(jsonObj_.get(), key.c_str());
+    }
+
     bool Empty() const noexcept {
         return jsonObj_ == nullptr || cJSON_GetArraySize(jsonObj_.get()) == 0;
     }

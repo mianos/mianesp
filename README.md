@@ -18,7 +18,8 @@ directly from this repo via the ESP-IDF component manager.
 | [`jsonwrapper`](components/jsonwrapper) | `JsonWrapper.h` | RAII wrapper over cJSON: parse, build, typed get/add, timestamps | `espressif/cjson` |
 | [`nvsstoragemanager`](components/nvsstoragemanager) | `NvsStorageManager.h` | Simple key/value store over NVS with a namespace | `nvs_flash` |
 | [`wifimanager`](components/wifimanager) | `WifiManager.h` | WiFi lifecycle + EspTouch V2 (SmartConfig) provisioning, hostname persistence | `esp_wifi`, `espressif/network_provisioning`, `nvsstoragemanager` |
-| [`webserver`](components/webserver) | `WebServer.h` | HTTP server base class with async workers and built-in endpoints (see below) | `esp_http_server`, `esp_timer`, `wifimanager`, `jsonwrapper` |
+| [`webserver`](components/webserver) | `WebServer.h` | HTTP server base class: async workers, `/healthz`, JSON + body/caller helpers. No WiFi, no network stack assumptions | `esp_http_server`, `esp_timer`, `lwip`, `jsonwrapper` |
+| [`wifiwebserver`](components/wifiwebserver) | `WifiWebServer.h` | `WebServer` plus the WiFi management endpoints (`/reset`, `/set_hostname`) | `webserver`, `wifimanager`, `jsonwrapper` |
 | [`httpclient`](components/httpclient) | `HttpClient.h` | Move-only wrapper over the ESP-IDF HTTP client for simple GET/POST | `esp_http_client` |
 | [`mqttwrapper`](components/mqttwrapper) | `MqttClient.h` | MQTT client with regex topic-routing, offline queueing and auto-resubscribe | `espressif/mqtt`, `espressif/cjson`, `nvsstoragemanager`, `jsonwrapper` |
 | [`audioplayer`](components/audioplayer) | `AudioPlayer.h` | Streaming MP3-over-HTTP player (GET or JSON POST, e.g. TTS): queue + dedicated task, jitter-buffered, Helix decode to I2S | `esp_driver_i2s`, `esp_http_client`, `chmorgan/esp-libhelix-mp3` |
@@ -28,9 +29,10 @@ directly from this repo via the ESP-IDF component manager.
 
 ### Inter-component dependencies
 
-`webserver` requires `wifimanager` + `jsonwrapper`; `wifimanager` requires
+`wifiwebserver` requires `webserver` + `wifimanager`; `wifimanager` requires
 `nvsstoragemanager`; `mqttwrapper` and `settingsbase` require
-`nvsstoragemanager` + `jsonwrapper`.
+`nvsstoragemanager` + `jsonwrapper`. `webserver` itself requires only
+`jsonwrapper`, so it builds on targets with no radio (ESP32-P4).
 When consumed over git, these transitive deps are resolved from **the same repo
 on `main`** (see each component's `idf_component.yml`).
 
@@ -53,6 +55,11 @@ dependencies:
   webserver:
     git: git@github.com:mianos/mianesp.git
     path: components/webserver
+    version: main
+  # Only for firmware that manages WiFi: adds /reset and /set_hostname.
+  wifiwebserver:
+    git: git@github.com:mianos/mianesp.git
+    path: components/wifiwebserver
     version: main
 
   # cJSON is no longer bundled in IDF v6 and mqtt is a managed component;
@@ -118,17 +125,43 @@ provisioning payload will **not** overwrite an existing hostname.
 
 ### webserver — `WebServer`
 
-HTTP server base class. Subclass it and override `populate_healthz_fields()` to
-add app-specific health data; register additional handlers by overriding
-`start()`. Requests are dispatched to a pool of async worker tasks.
+HTTP server base class, network-stack agnostic. Subclass it and override
+`populate_healthz_fields()` to add app-specific health data, and
+`register_routes()` (or `start()`) to add endpoints. Requests are dispatched to
+a pool of async worker tasks.
 
 ```cpp
-WebContext ctx(&wifi);
-WebServer server(&ctx);
-server.start();   // registers the built-in endpoints, then your own
+// No WiFi on this target (e.g. ESP32-P4 Ethernet): the base server is enough.
+WebContext ctx;
+MyServer server(&ctx);
+server.start();   // /healthz, then whatever register_routes() adds
 ```
 
+Handlers get `sendJson()`, `sendJsonError()`, `readJsonBody()` (bounded, exactly
+Content-Length bytes, 400/413 replies already sent on failure) and
+`callerAddress()`, so each firmware does not re-implement them.
+
+### wifiwebserver — `WifiWebServer`
+
+`WebServer` plus the endpoints that need a `WiFiManager`. Use it for firmware
+that provisions over WiFi:
+
+```cpp
+WifiWebContext ctx(&wifi);
+WifiWebServer server(&ctx);
+server.start();   // /healthz + /reset + /set_hostname, then your routes
+```
+
+> **Migrating from `webserver` ≤ 0.0.1:** `/reset`, `/set_hostname` and the
+> `wifiManager` in `WebContext` moved here. Firmware that subclassed
+> `WebServer` should subclass `WifiWebServer` and pass a `WifiWebContext`;
+> code reaching `webContext->wifiManager` needs
+> `static_cast<WifiWebContext*>(webContext)->wifiManager`. Firmware without
+> WiFi should keep using `WebServer` alone.
+
 #### Built-in endpoints
+
+Endpoints 1 and 2 are registered by `WifiWebServer`; endpoint 3 by `WebServer`.
 
 ##### 1. Reset WiFi Configuration
 
@@ -285,7 +318,8 @@ components/
   mqttwrapper/       # esp-mqtt wrapper + topic routing
   nvsstoragemanager/ # NVS key/value store
   otawrapper/        # HTTPS OTA
-  webserver/         # esp_http_server base class
+  webserver/         # esp_http_server base class (no WiFi)
+  wifiwebserver/     # WebServer + /reset + /set_hostname
   wifimanager/       # WiFi + EspTouch V2 provisioning
 idf_components.yaml  # repo manifest (name/version/maintainers)
 ```

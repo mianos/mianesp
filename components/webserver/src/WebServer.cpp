@@ -43,22 +43,6 @@ esp_err_t WebServer::start() {
         return result;
     }
 
-    httpd_uri_t resetWifiUri {
-        .uri       = "/reset",
-        .method    = HTTP_POST,
-        .handler   = reset_wifi_handler,
-        .user_ctx  = webContext
-    };
-    httpd_register_uri_handler(server, &resetWifiUri);
-
-    httpd_uri_t setHostnameUri {
-        .uri       = "/set_hostname",
-        .method    = HTTP_POST,
-        .handler   = set_hostname_handler,
-        .user_ctx  = webContext
-    };
-    httpd_register_uri_handler(server, &setHostnameUri);
-
     httpd_uri_t healthzUri {
         .uri       = "/healthz",
         .method    = HTTP_GET,
@@ -68,6 +52,10 @@ esp_err_t WebServer::start() {
         .user_ctx  = this
     };
     httpd_register_uri_handler(server, &healthzUri);
+
+    // Derived classes add their own endpoints (wifiwebserver adds /reset and
+    // /set_hostname this way).
+    register_routes();
 
     // The built-in replies are plain text; keep every error in the JSON shape.
     httpd_register_err_handler(server, HTTPD_404_NOT_FOUND, [](httpd_req_t* req, httpd_err_code_t) {
@@ -89,6 +77,11 @@ esp_err_t WebServer::stop() {
         return result;
     }
     return ESP_OK;
+}
+
+// The base server has no routes of its own beyond /healthz; derived classes
+// override this to add theirs.
+void WebServer::register_routes() {
 }
 
 void WebServer::start_async_req_workers() {
@@ -252,24 +245,6 @@ std::string WebServer::callerAddress(httpd_req_t* req) {
     return s;
 }
 
-esp_err_t WebServer::reset_wifi_handler(httpd_req_t* req) {
-    auto* ctx = static_cast<WebContext*>(req->user_ctx);
-    if (!ctx) {
-        ESP_LOGE(TAG, "No valid WebContext");
-        return sendJsonError(req, 500, "Missing context");
-    }
-    if (!ctx->wifiManager) {
-        ESP_LOGE(TAG, "No valid wifiManager");
-        return sendJsonError(req, 500, "Missing wifiManager");
-    }
-
-    ESP_LOGW(TAG, "POST /reset from %s: clearing Wi-Fi credentials", callerAddress(req).c_str());
-    ctx->wifiManager->clear();
-    JsonWrapper response;
-    response.AddItem("wifi_cleared", true);
-    return sendJson(req, response);
-}
-
 esp_err_t WebServer::healthz_handler(httpd_req_t* req) {
     auto* server = static_cast<WebServer*>(req->user_ctx);
     if (!server) {
@@ -298,30 +273,4 @@ esp_err_t WebServer::healthz_handler(httpd_req_t* req) {
     server->populate_healthz_fields(server->webContext, json);
 
     return sendJson(req, json);
-}
-
-esp_err_t WebServer::set_hostname_handler(httpd_req_t* req) {
-    auto* ctx = static_cast<WebContext*>(req->user_ctx);
-    if (!ctx) {
-        ESP_LOGE(TAG, "No valid WebContext");
-        return sendJsonError(req, 500, "Missing context");
-    }
-    if (!ctx->wifiManager) {
-        ESP_LOGE(TAG, "No valid wifiManager");
-        return sendJsonError(req, 500, "Missing wifiManager");
-    }
-    JsonWrapper json;
-    if (!readJsonBody(req, json)) return ESP_FAIL;
-
-	std::string host_name;
-    if (!json.GetField("host_name", host_name, true)) {
-		return sendJsonError(req, 400, "Missing or invalid 'host_name'");
-	}
-
-    ESP_LOGW(TAG, "POST /set_hostname from %s: %s", callerAddress(req).c_str(), host_name.c_str());
-	ctx->wifiManager->configSetHostName(host_name);
-
-    JsonWrapper response;
-	response.AddItem("host_name", host_name);
-    return sendJson(req, response);
 }

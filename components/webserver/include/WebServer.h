@@ -5,15 +5,13 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
-#include "WifiManager.h"
 #include "JsonWrapper.h"
 
+// Application state shared with the handlers. The base server needs nothing
+// from the network stack, so this carries nothing: subclasses add the pointers
+// their handlers need (see WifiWebContext in wifiwebserver).
 struct WebContext {
-    WiFiManager* wifiManager;
-
-    WebContext(WiFiManager* wifiManagerPointer)
-        : wifiManager(wifiManagerPointer) {
-    }
+    virtual ~WebContext() = default;
 };
 
 class WebServer {
@@ -26,6 +24,13 @@ public:
 
 protected:
     virtual void populate_healthz_fields(WebContext *ctx, JsonWrapper& json) {}
+
+    // URIs registered here are added by start(), after /healthz. Overrides
+    // should call WebServer::register_routes() first. (wifiwebserver uses this
+    // for /reset and /set_hostname, so firmware without a radio links a server
+    // with no WiFi endpoints at all.)
+    virtual void register_routes();
+
     static esp_err_t healthz_handler(httpd_req_t* req);
 
     // REST conventions shared by every device: success is 2xx with the
@@ -61,8 +66,5 @@ private:
     static bool is_on_async_worker_thread();
     static esp_err_t submit_async_req(httpd_req_t* req, httpd_req_handler_t handler);
     static void start_async_req_workers();
-
-    static esp_err_t reset_wifi_handler(httpd_req_t* req);
-    static esp_err_t set_hostname_handler(httpd_req_t* req);
 };
 
