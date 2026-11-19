@@ -31,9 +31,14 @@ esp_err_t WebServer::start() {
     config.lru_purge_enable = true;
     config.server_port = 80;
     config.max_open_sockets = MAX_ASYNC_REQUESTS + 1;
-    // Default is 8; derived servers (e.g. robofoc) register more than the base
-    // /reset + /set_hostname + /healthz, so give the table generous headroom.
-    config.max_uri_handlers = 16;
+    // Default is 8. The table holds /healthz plus every route a derived server
+    // adds, and esp32p4-ntp registers sixteen of them (its /firmware POST is the
+    // last): at 16 the table was exactly full, registration of that last route
+    // failed, and OTA was unreachable -- a 405 from a browser and no way to
+    // install the fix. Registration failures are logged but not fatal, so the
+    // shortfall is silent. 32 leaves room for two more derived routes and the
+    // health endpoint's own slot.
+    config.max_uri_handlers = 32;
     config.stack_size = CONFIG_WEBSERVER_TASK_STACK_SIZE;
 
     ESP_LOGI(TAG, "Starting server on port: %d", config.server_port);
