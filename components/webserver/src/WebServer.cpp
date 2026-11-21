@@ -40,6 +40,7 @@ esp_err_t WebServer::start() {
     // health endpoint's own slot.
     config.max_uri_handlers = 32;
     config.stack_size = CONFIG_WEBSERVER_TASK_STACK_SIZE;
+    config.core_id = CONFIG_WEBSERVER_TASK_AFFINITY;
 
     ESP_LOGI(TAG, "Starting server on port: %d", config.server_port);
     esp_err_t result = httpd_start(&server, &config);
@@ -104,13 +105,14 @@ void WebServer::start_async_req_workers() {
     }
 
     for (int i = 0; i < MAX_ASYNC_REQUESTS; ++i) {
-        BaseType_t created = xTaskCreate(
+        BaseType_t created = xTaskCreatePinnedToCore(
             async_req_worker_task,
             "async_req_worker",
             ASYNC_WORKER_TASK_STACK_SIZE,
             nullptr,
             ASYNC_WORKER_TASK_PRIORITY,
-            &worker_handles[i]
+            &worker_handles[i],
+            CONFIG_WEBSERVER_TASK_AFFINITY
         );
         if (created != pdPASS) {
             ESP_LOGE(TAG, "Failed to start async worker %d", i);

@@ -10,4 +10,26 @@ menu "mianesp web server"
             Raise it for handlers that do heavy work inline, such as receiving
             and verifying an OTA image.
 
+    choice WEBSERVER_TASK_AFFINITY
+        prompt "Core for the HTTP server task and its async workers"
+        default WEBSERVER_TASK_AFFINITY_NO_AFFINITY
+        help
+            Any core unless the firmware keeps a core for something else, such
+            as an interrupt whose latency matters.
+
+        config WEBSERVER_TASK_AFFINITY_NO_AFFINITY
+            bool "Any core"
+        config WEBSERVER_TASK_AFFINITY_CPU0
+            bool "Core 0"
+        config WEBSERVER_TASK_AFFINITY_CPU1
+            bool "Core 1"
+            depends on !FREERTOS_UNICORE
+    endchoice
+
+    config WEBSERVER_TASK_AFFINITY
+        hex
+        default FREERTOS_NO_AFFINITY if WEBSERVER_TASK_AFFINITY_NO_AFFINITY
+        default 0x0 if WEBSERVER_TASK_AFFINITY_CPU0
+        default 0x1 if WEBSERVER_TASK_AFFINITY_CPU1
+
 endmenu
