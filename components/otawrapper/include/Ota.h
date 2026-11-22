@@ -1,5 +1,6 @@
 #pragma once
 
+#include "esp_crt_bundle.h"
 #include "esp_http_client.h"
 #include "esp_https_ota.h"
 #include "esp_log.h"
@@ -17,7 +18,8 @@ public:
 
     // Constructor with progress callback and percentage step (default 10%)
     OTAUpdater(const std::string& ota_url, std::function<void(int)> callback, int step = 10)
-        : url(ota_url), progress_callback(std::move(callback)), progress_step(step) { }
+        : url(ota_url), progress_callback(std::move(callback)),
+          progress_step(step > 0 ? step : 10) { }
 
     void start(const std::string& optional_url = "") {
         pending_url = optional_url.empty() ? url : optional_url;
@@ -32,8 +34,13 @@ public:
     void perform_update(const std::string& ota_url) {
         esp_http_client_config_t http_config = {};
         http_config.url = ota_url.c_str();
-        http_config.cert_pem = nullptr;
-        http_config.skip_cert_common_name_check = true;
+        // esp_https_ota_begin() refuses a config that offers it no way to verify
+        // the server: no cert_pem, no bundle and no secure element is
+        // ESP_ERR_INVALID_ARG ("No option for server verification is enabled"),
+        // before it even opens the socket. Attaching the CA bundle fixes HTTPS
+        // properly and makes no difference over plain http, so it is always set.
+        http_config.crt_bundle_attach = esp_crt_bundle_attach;
+        http_config.timeout_ms = 15000;
 
         esp_https_ota_config_t ota_config = {};
         ota_config.http_config = &http_config;
@@ -61,7 +68,8 @@ public:
                     int progress_percent = (received_size * 100) / image_size;
 
                     // Report only at progress_step intervals
-                    if (progress_percent / progress_step != last_reported_progress / progress_step) {
+                    if (progress_callback &&
+                        progress_percent / progress_step != last_reported_progress / progress_step) {
                         progress_callback((progress_percent / progress_step) * progress_step);
                         last_reported_progress = progress_percent;
                     }
@@ -69,7 +77,7 @@ public:
 
                 vTaskDelay(pdMS_TO_TICKS(50));
             } else if (ret == ESP_OK) {
-                progress_callback(100);  // Ensure 100% is reported
+                if (progress_callback) progress_callback(100);  // Ensure 100% is reported
                 ESP_LOGI("OTA", "Download complete");
                 break;
             } else {
@@ -77,6 +85,15 @@ public:
                 esp_https_ota_abort(ota_handle);
                 return;
             }
+        }
+
+        // perform() can return ESP_OK with the connection cut short, leaving an
+        // image that only fails at finish(). Check the byte count first, so the
+        // cause is named accurately in the log.
+        if (!esp_https_ota_is_complete_data_received(ota_handle)) {
+            ESP_LOGE("OTA", "Download truncated; image not complete");
+            esp_https_ota_abort(ota_handle);
+            return;
         }
 
         if (esp_https_ota_finish(ota_handle) == ESP_OK) {

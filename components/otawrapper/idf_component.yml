@@ -1,2 +1,2 @@
-version: "0.0.1"
-description: "Simple c++ wrapepr around esp OTA"
+version: "0.1.0"
+description: "Simple c++ wrapper around esp_https_ota, with CA bundle and rollback-friendly checks"
