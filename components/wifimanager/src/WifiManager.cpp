@@ -4,7 +4,7 @@
 
 #include <network_provisioning/manager.h>
 
-#include "wifimanager.h"
+#include "WifiManager.h"
 
 EventGroupHandle_t WiFiManager::wifi_event_group;
 const char* WiFiManager::TAG = "WiFiManager";
