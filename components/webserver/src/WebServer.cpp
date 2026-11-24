@@ -177,6 +177,7 @@ static const char* statusLine(int statusCode) {
         case 400: return "400 Bad Request";
         case 404: return "404 Not Found";
         case 405: return "405 Method Not Allowed";
+        case 408: return "408 Request Timeout";
         case 409: return "409 Conflict";
         case 413: return "413 Payload Too Large";
         case 422: return "422 Unprocessable Entity";
